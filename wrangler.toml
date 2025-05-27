@@ -2,4 +2,3 @@ name = "r2-signed-url"
 main = "index.js"
 compatibility_date = "2025-05-27"
 compatibility_flags = ["nodejs_compat"]
-
