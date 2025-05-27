@@ -1,8 +1,5 @@
 name = "r2-signed-url"
 main = "index.js"
 compatibility_date = "2025-05-27"
+compatibility_flags = ["nodejs_compat"]
 
-[[r2_buckets]]
-binding = "DOCEEXPERT_BUCKET"
-bucket_name = "docexpert-docs"
-preview_bucket_name = "docexpert-docs"
