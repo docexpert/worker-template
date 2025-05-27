@@ -1,7 +1,3 @@
-name = "helloworld"
-type = "javascript"
-
-account_id = ""
-workers_dev = true
-route = ""
-zone_id = ""
+name = "r2-signed-url"
+main = "index.js"
+compatibility_date = "2025-05-27"
