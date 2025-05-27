@@ -6,6 +6,6 @@
     "@aws-sdk/s3-request-presigner": "^3.491.0"
   },
   "devDependencies": {
-    "wrangler": "^3.49.1"
+    "wrangler": "^4.17.0"
   }
 }
