@@ -5,11 +5,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const filename = url.searchParams.get("filename");
-    const fileUrl = url.searchParams.get("file_url"); // Only required for PUT
+    const fileUrl = url.searchParams.get("file_url"); // Only needed for PUT
     const action = url.searchParams.get("action") || "put";
     const authHeader = request.headers.get("Authorization");
 
-    // 🔐 Auth
+    // 🔐 Require Authorization
     if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -27,16 +27,16 @@ export default {
       }
     });
 
+    // 🔽 View mode: generate signed GET URL
     if (action === "get") {
-      // 🎯 Generate a signed URL for downloading the file
-      const command = new GetObjectCommand({
-        Bucket: "docexpert-docs",
-        Key: filename
-      });
-
       try {
+        const command = new GetObjectCommand({
+          Bucket: "docexpert-docs",
+          Key: filename
+        });
+
         const signedUrl = await getSignedUrl(client, command, { expiresIn: 900 });
-        return new Response(JSON.stringify({ url: signedUrl }), {
+        return new Response(JSON.stringify({ success: true, url: signedUrl }), {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
@@ -44,7 +44,7 @@ export default {
       }
     }
 
-    // 📨 PUT: Upload file to R2 from `file_url`
+    // 📤 Upload mode: fetch and store file in R2
     if (!fileUrl) {
       return new Response("Missing required parameter: file_url", { status: 400 });
     }
@@ -55,7 +55,7 @@ export default {
         headers: {
           "User-Agent": "Mozilla/5.0",
           "Accept": "application/pdf",
-          "Referer": "https://pdf.co" // Optional, helps with referer checks
+          "Referer": "https://pdf.co" // Optional: may help bypass origin restrictions
         }
       });
 
@@ -69,16 +69,28 @@ export default {
 
     const fileBuffer = await fileResponse.arrayBuffer();
 
-    const command = new PutObjectCommand({
-      Bucket: "docexpert-docs",
-      Key: filename,
-      Body: fileBuffer,
-      ContentType: "application/pdf"
-    });
-
     try {
-      await client.send(command);
-      return new Response(JSON.stringify({ success: true, filename }), {
+      const putCommand = new PutObjectCommand({
+        Bucket: "docexpert-docs",
+        Key: filename,
+        Body: fileBuffer,
+        ContentType: "application/pdf"
+      });
+
+      await client.send(putCommand);
+
+      const getCommand = new GetObjectCommand({
+        Bucket: "docexpert-docs",
+        Key: filename
+      });
+
+      const signedUrl = await getSignedUrl(client, getCommand, { expiresIn: 900 });
+
+      return new Response(JSON.stringify({
+        success: true,
+        filename,
+        url: signedUrl
+      }), {
         headers: { "Content-Type": "application/json" }
       });
     } catch (err) {
