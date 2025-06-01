@@ -7,19 +7,25 @@ export default {
     const fileUrl = url.searchParams.get("file_url");
     const authHeader = request.headers.get("Authorization");
 
-    // Auth
+    // 🔐 Auth
     if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    // 🔎 Validate inputs
     if (!filename || !fileUrl) {
       return new Response("Missing required parameters", { status: 400 });
     }
 
-    // Fetch file from PDF.co signed URL
+    // 📥 Fetch file
     let fileResponse;
     try {
-      fileResponse = await fetch(fileUrl);
+      fileResponse = await fetch(fileUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/pdf"
+        }
+      });
       if (!fileResponse.ok) {
         return new Response(`Failed to fetch file from source: ${fileResponse.status} - ${await fileResponse.text()}`, { status: 500 });
       }
@@ -29,7 +35,7 @@ export default {
 
     const fileBuffer = await fileResponse.arrayBuffer();
 
-    // Upload to R2
+    // ☁️ Upload to R2
     const client = new S3Client({
       region: "auto",
       endpoint: "https://72916a6493777ed93342623a8ac89a09.r2.cloudflarestorage.com",
