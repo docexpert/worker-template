@@ -34,8 +34,13 @@ export default {
       ? new GetObjectCommand({ Bucket: "docexpert-docs", Key: filename })
       : new PutObjectCommand({ Bucket: "docexpert-docs", Key: filename, ContentType: "application/pdf" });
 
-    // ✅ Generate signed URL
-    const signedUrl = await getSignedUrl(client, command, { expiresIn: 900 });
+    // ✅ Generate signed URL (disable SHA256 enforcement for PUTs)
+    const signedUrl = await getSignedUrl(client, command, {
+      expiresIn: 900,
+      signingRegion: "auto",
+      signingService: "s3",
+      unsignableHeaders: new Set(["x-amz-content-sha256"])  // <-- this line is key!
+    });
 
     return new Response(JSON.stringify({ url: signedUrl }), {
       headers: { "Content-Type": "application/json" },
