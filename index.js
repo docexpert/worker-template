@@ -1,15 +1,17 @@
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand
-} from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const filename = url.searchParams.get("filename");
-    const action = url.searchParams.get("action") || "upload";
+    const action = url.searchParams.get("action") || "put";
+    const token = url.searchParams.get("token");
+
+    // ✅ Token check
+    if (token !== env.AUTH_TOKEN) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
     if (!filename) {
       return new Response("Missing ?filename=", { status: 400 });
@@ -21,30 +23,17 @@ export default {
       credentials: {
         accessKeyId: env.R2_ACCESS_KEY_ID,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-      },
+      }
     });
 
-    let command;
-    if (action === "view") {
-      command = new GetObjectCommand({
-        Bucket: "docexpert-docs",
-        Key: filename,
-      });
-    } else {
-      command = new PutObjectCommand({
-        Bucket: "docexpert-docs",
-        Key: filename,
-        ContentType: "application/pdf",
-      });
-    }
+    const command = action === "get"
+      ? new GetObjectCommand({ Bucket: "docexpert-docs", Key: filename })
+      : new PutObjectCommand({ Bucket: "docexpert-docs", Key: filename, ContentType: "application/pdf" });
 
-    try {
-      const signedUrl = await getSignedUrl(client, command, { expiresIn: 900 });
-      return new Response(JSON.stringify({ url: signedUrl }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (err) {
-      return new Response(`Error generating signed URL: ${err.message}`, { status: 500 });
-    }
+    const signedUrl = await getSignedUrl(client, command, { expiresIn: 900 });
+
+    return new Response(JSON.stringify({ url: signedUrl }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 };
