@@ -22,18 +22,22 @@ export default {
     try {
       fileResponse = await fetch(fileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "application/pdf"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "Accept": "application/pdf",
+          "Referer": "https://pdf.co" // optional but can help bypass S3 referer checks
         }
       });
+    
       if (!fileResponse.ok) {
-        return new Response(`Failed to fetch file from source: ${fileResponse.status} - ${await fileResponse.text()}`, { status: 500 });
+        const errorText = await fileResponse.text();
+        return new Response(`Failed to fetch file from source: ${fileResponse.status} - ${errorText}`, { status: 500 });
       }
     } catch (err) {
-      return new Response(`Fetch error: ${err}`, { status: 500 });
+      return new Response(`Fetch error: ${err.message || err}`, { status: 500 });
     }
-
+    
     const fileBuffer = await fileResponse.arrayBuffer();
+
 
     // ☁️ Upload to R2
     const client = new S3Client({
