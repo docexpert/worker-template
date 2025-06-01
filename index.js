@@ -1,12 +1,14 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const filename = url.searchParams.get("filename");
-    const action = url.searchParams.get("action") || "upload";
-    const authHeader = request.headers.get("Authorization");
+    const action = url.searchParams.get("action") || "put";
+    const fileUrl = url.searchParams.get("file_url");
 
+    const authHeader = request.headers.get("Authorization");
     if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -24,33 +26,42 @@ export default {
       }
     });
 
+    // If this is an upload (PUT), fetch the file and upload it directly
     if (action === "upload") {
-      const fileBuffer = await request.arrayBuffer();
-      const putCommand = new PutObjectCommand({
+      if (!fileUrl) {
+        return new Response("Missing ?file_url=", { status: 400 });
+      }
+
+      const fileResponse = await fetch(fileUrl);
+      if (!fileResponse.ok) {
+        return new Response("Failed to fetch file from source", { status: 500 });
+      }
+
+      const fileBuffer = await fileResponse.arrayBuffer();
+
+      const uploadCommand = new PutObjectCommand({
         Bucket: "docexpert-docs",
         Key: filename,
         Body: fileBuffer,
         ContentType: "application/pdf",
       });
 
-      await client.send(putCommand);
-      return new Response(JSON.stringify({ status: "Uploaded" }), {
-        headers: { "Content-Type": "application/json" },
+      await client.send(uploadCommand);
+
+      return new Response(JSON.stringify({ status: "uploaded" }), {
+        headers: { "Content-Type": "application/json" }
       });
     }
 
-    if (action === "get") {
-      const getCommand = new GetObjectCommand({
-        Bucket: "docexpert-docs",
-        Key: filename,
-      });
+    // For 'get' or 'put' signed URL
+    const command = action === "get"
+      ? new GetObjectCommand({ Bucket: "docexpert-docs", Key: filename })
+      : new PutObjectCommand({ Bucket: "docexpert-docs", Key: filename, ContentType: "application/pdf" });
 
-      const url = await getSignedUrl(client, getCommand, { expiresIn: 900 });
-      return new Response(JSON.stringify({ url }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    const signedUrl = await getSignedUrl(client, command, { expiresIn: 900 });
 
-    return new Response("Invalid action", { status: 400 });
+    return new Response(JSON.stringify({ url: signedUrl }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 };
