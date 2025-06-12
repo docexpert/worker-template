@@ -9,9 +9,11 @@ export default {
     const action = url.searchParams.get("action") || "put";
     const authHeader = request.headers.get("Authorization");
 
-    // 🔐 Require Authorization
-    if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
-      return new Response("Unauthorized", { status: 401 });
+    // 🔐 Require Authorization for put/get actions, allow proxy to be public
+    if (action !== "proxy") {
+      if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
+        return new Response("Unauthorized", { status: 401 });
+      }
     }
 
     if (!filename) {
@@ -27,7 +29,30 @@ export default {
       }
     });
 
-    // 🔽 View mode: generate signed GET URL
+    // Proxy mode: stream PDF for PDF.js with CORS headers
+    if (action === "proxy") {
+      try {
+        const command = new GetObjectCommand({
+          Bucket: "docexpert-docs",
+          Key: filename
+        });
+
+        const response = await client.send(command);
+        const stream = response.Body;
+
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store"
+          }
+        });
+      } catch (err) {
+        return new Response(`Failed to proxy PDF: ${err}`, { status: 500 });
+      }
+    }
+
+    // Get mode: return signed URL
     if (action === "get") {
       try {
         const command = new GetObjectCommand({
@@ -44,7 +69,7 @@ export default {
       }
     }
 
-    // 📤 Upload mode: fetch and store file in R2
+    // Put mode: upload file from external URL
     if (!fileUrl) {
       return new Response("Missing required parameter: file_url", { status: 400 });
     }
@@ -55,7 +80,7 @@ export default {
         headers: {
           "User-Agent": "Mozilla/5.0",
           "Accept": "application/pdf",
-          "Referer": "https://pdf.co" // Optional: may help bypass origin restrictions
+          "Referer": "https://pdf.co"  // Optional: still useful for Bubble-hosted URLs
         }
       });
 
