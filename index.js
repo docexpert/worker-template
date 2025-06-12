@@ -9,7 +9,7 @@ export default {
     const action = url.searchParams.get("action") || "put";
     const authHeader = request.headers.get("Authorization");
 
-    // 🔐 Require Authorization for put/get actions, allow proxy to be public
+    // Require authorization for put/get actions, allow proxy to be public
     if (action !== "proxy") {
       if (!authHeader || authHeader !== `Bearer ${env.AUTH_TOKEN}`) {
         return new Response("Unauthorized", { status: 401 });
@@ -29,7 +29,7 @@ export default {
       }
     });
 
-    // 🆕 Proxy mode: stream PDF for PDF.js with correct CORS
+    // Proxy mode: stream PDF with CORS headers for PDF.js
     if (action === "proxy") {
       try {
         const command = new GetObjectCommand({
@@ -52,7 +52,7 @@ export default {
       }
     }
 
-    // 🔽 Get mode: generate signed URL
+    // Get mode: return signed URL
     if (action === "get") {
       try {
         const command = new GetObjectCommand({
@@ -69,15 +69,19 @@ export default {
       }
     }
 
-    // 📤 Put mode: upload file from file_url
+    // Put mode: upload file from external URL
     if (!fileUrl) {
       return new Response("Missing required parameter: file_url", { status: 400 });
     }
 
     let fileResponse;
     try {
-      // 🔧 NO extra headers: signed URLs are very strict on server-side fetch
-      fileResponse = await fetch(fileUrl);
+      fileResponse = await fetch(fileUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          "Accept": "application/pdf"
+        }
+      });
 
       if (!fileResponse.ok) {
         const errorText = await fileResponse.text();
